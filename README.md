@@ -4,6 +4,8 @@ STM32 将数据按最多 1024 字节组帧。RK 是 SPI 主机，校验帧头和
 
 实物为 **鲁班猫 5 + STM32F103RCT6** 时，按 [接线、烧录与首次验收指南](docs/lubancat5-stm32f103rct6.md) 操作。鲁班猫 5 与 5-V2 的 SPI CS0 物理脚分别为 24、38，不能混用。
 
+Windows + ST-Link 首次验收可直接下载仓库内的 [预编译验收 HEX](firmware/stm32f103rct6-demo.hex)，通过 STM32CubeProgrammer 的 ST-LINK / SWD 接口写入并校验，无需先编译或安装 OpenOCD。PowerShell 命令及 OpenOCD 0.12.x 的 ST-Link 接法见上述指南；`cmsis-dap.cfg` 仅用于 CMSIS-DAP 下载器。
+
 ## 接线
 
 共地，3.3V 电平。这里的 GPIO 编号必须换成实际板卡的 gpiochip 内线号。

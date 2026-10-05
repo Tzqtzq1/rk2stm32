@@ -22,40 +22,76 @@ READY/ACK 的 RK 引脚是为本项目选择的接法；8、10 脚要作为普�
 
 普通版与 V2 的 CS0 位置来自野火分别提供的 [40Pin 引脚图](https://doc.embedfire.com/linux/rk3588/quick_start/zh/latest/quick_start/40pin/40pin.html)，不能把教程中其他板卡的第 24 脚片选直接套用到 V2。
 
-## 2. 电脑通过 CMSIS-DAP 下载 STM32
+## 2. Windows 电脑通过 ST-Link 下载 STM32
 
-CMSIS-DAP 是下载器，不连接鲁班猫的 SPI 排针。下载时这样接：
+ST-Link 的 USB 插电脑，SWD 引脚连接 STM32 最小系统板。板上标注 SWDIO、SWCLK 的接口分别就是 PA13、PA14，可以直接按丝印连接：
 
-| CMSIS-DAP 标识 | STM32 |
+| ST-Link 标识 | STM32 最小系统板 |
 |---|---|
 | SWDIO / DIO | PA13 / SWDIO |
 | SWCLK / CLK | PA14 / SWCLK |
 | GND | GND |
-| nRESET / RST（若有，建议接） | NRST |
-| VTref（仅当手册确认是电压检测输入） | STM32 板上 3.3V |
+| NRST / RST（若有，建议接） | NRST / RST |
+| VTref / VAPP（目标电压检测输入） | STM32 板上 3.3V |
 
-STM32 板单独供电；下载器上标注 VCC、3.3V 的针可能是供电输出，不要直接当 VTref 使用。BOOT0 保持 0，从 Flash 启动。CMSIS-DAP 的 USB 连接电脑。
+STM32 板通过正常供电接口单独供电；ST-Link 上只有 VCC、3.3V 标识时，需要先确认它是供电输出还是电压检测脚。BOOT0 保持 0，从 Flash 启动。ST-Link 不连接鲁班猫的 SPI 排针。
 
 当前构建已匹配 STM32F103RCT6：`STM32F103xE` 宏、高密度 `startup_stm32f103xe.s`、256KB Flash、48KB RAM。ST 将 RC/RD/RE 归入共用的高密度芯片定义，宏中的 xE 不表示实物必须是 RE。参考 [ST 数据手册表 2](https://www.st.com/resource/en/datasheet/stm32f103rc.pdf)。
 
-电脑需要 ARM GNU 工具链（`arm-none-eabi-gcc`、`arm-none-eabi-objcopy`）和 OpenOCD。macOS 可通过 `brew install openocd` 安装 OpenOCD；Linux 通常通过 `sudo apt install openocd` 安装。Windows 需准备 OpenOCD 可执行文件及随附 scripts 目录，保证 `openocd` 可在终端调用。
+### 2.1. 先取得可直接下载的 HEX
 
-在本项目根目录中构建首次验收固件：
+仓库的 [firmware 目录](../firmware/README.md) 提供了预编译固件，Windows 首次验收无需安装编译器。下面假设项目路径为 `F:\rk2stm32`，在 PowerShell 更新仓库并确认验收 HEX 存在：
 
-```sh
-make -C 925 BUILD=build-rct6-demo DEMO=1
+```powershell
+Set-Location F:\rk2stm32
+git pull --ff-only
+Test-Path .\firmware\stm32f103rct6-demo.hex
 ```
 
-通过 CMSIS-DAP 下载并校验，完成后复位运行：
+`Test-Path` 应输出 `True`。首次用 `stm32f103rct6-demo.hex`，不要选择未接入采集逻辑的默认固件。
 
-```sh
-openocd -f 925/cmsis-dap.cfg \
-  -c "program 925/build-rct6-demo/925.hex verify reset exit"
+### 2.2. 推荐使用 STM32CubeProgrammer
+
+从 [ST 官方页面](https://www.st.com/en/development-tools/stm32cubeprog.html) 下载并安装 Windows 版 STM32CubeProgrammer 及 ST-Link 驱动。打开软件后：
+
+1. 右侧选择 **ST-LINK**，端口选择 **SWD**，点击 **Connect**。
+2. 打开 `F:\rk2stm32\firmware\stm32f103rct6-demo.hex`，勾选下载后校验，执行下载。
+3. 校验成功后，启动鲁班猫的接收程序，再按一次 STM32 复位键。
+
+也可以调用 STM32CubeProgrammer 自带的 CLI。以下使用默认安装目录；若安装到了其他位置，替换 EXE 路径。整条命令在 PowerShell 中作为一行执行：
+
+```powershell
+& "C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer\bin\STM32_Programmer_CLI.exe" -c port=SWD freq=1000 -w "F:\rk2stm32\firmware\stm32f103rct6-demo.hex" -v -rst
 ```
 
-HEX 已包含 Flash 地址，无需另填 `0x08000000`。OpenOCD 的 `program` 命令会擦除将要写入的 Flash 扇区，覆盖这些扇区中的旧程序。下载成功应看到写入与校验成功的提示。命令参数参考 [OpenOCD 官方 Flash Programming](https://openocd.org/doc/html/Flash-Programming.html)。
+`-w` 写入、紧接的 `-v` 校验、`-rst` 软件复位。HEX 自带下载地址，无需另填地址。参数来源为 [ST 官方 MCU CLI 文档](https://dev.st.com/stm32cube-docs/prog/2.23.0/en/docs/markup/CubeProg_Command_Lines.html)。
 
-如果提示找不到 CMSIS-DAP，检查数据 USB 线和下载器模式；双模式下载器应设为 CMSIS-DAP。若能发现下载器但连接不到 STM32，检查独立供电、共地、PA13/PA14 接线，必要时连接 NRST 并将配置中的 `adapter speed` 降至 100。
+### 2.3. 如果继续使用 OpenOCD 0.12.x
+
+报错“无法将 openocd 项识别为命令”表示没有安装 OpenOCD，或它的 `bin` 目录不在 PATH。Conda 的 `(base)` 提示并不表示安装了 OpenOCD。
+
+OpenOCD 官网列出了 [xPack Windows 二进制发行版](https://openocd.org/pages/getting-openocd.html)。从 [xPack 官方 Releases](https://github.com/xpack-dev-tools/openocd-xpack/releases) 下载适合普通 64 位 Windows 的 `win32-x64.zip`，解压后保留 `bin`、`share` 等目录的相对结构。不要只复制 `openocd.exe`。
+
+假设解压后的 `bin\openocd.exe` 位于 `C:\Tools\OpenOCD`，先检查版本，再用 ST-Link 配置下载；如果实际解压位置不同，替换 EXE 路径：
+
+```powershell
+& "C:\Tools\OpenOCD\bin\openocd.exe" --version
+& "C:\Tools\OpenOCD\bin\openocd.exe" -f "F:/rk2stm32/925/stlink.cfg" -c "program F:/rk2stm32/firmware/stm32f103rct6-demo.hex verify reset exit"
+```
+
+`925/stlink.cfg` 适用于 OpenOCD 0.12.x 的 ST-Link HLA 驱动。已有 OpenOCD 在 PATH 时，也可以从项目根目录执行这一行：
+
+```powershell
+openocd -f 925/stlink.cfg -c "program firmware/stm32f103rct6-demo.hex verify reset exit"
+```
+
+PowerShell 不使用 Bash 的行尾 `\` 换行；不要把 `-c` 单独作为另一条命令。这里统一提供单行命令，规则参考 [Microsoft PowerShell 文档](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_parsing)。OpenOCD 参数参考 [官方 Flash Programming](https://openocd.org/doc/html/Flash-Programming.html)。
+
+源码自行编译需要 ARM GNU 工具链（`arm-none-eabi-gcc`、`arm-none-eabi-objcopy`）和 make，执行 `make -C 925 BUILD=build-rct6-demo DEMO=1` 后使用 `925/build-rct6-demo/925.hex`。使用预编译 HEX 时不需要这一步。源码改变后必须重新编译；预编译固件不会自动更新。
+
+`925/cmsis-dap.cfg` 仅供 CMSIS-DAP 下载器使用。现在选择 ST-Link，使用 `925/stlink.cfg` 或 STM32CubeProgrammer 的 ST-LINK / SWD 接口。
+
+若能发现 ST-Link 但连接不到 STM32，检查独立供电、共地、SWDIO/SWCLK 接线、目标电压检测和 BOOT0，必要时连接 NRST 并降低 SWD 频率。电脑上的文件与配置检查不等于已经完成实板下载。
 
 ## 3. 鲁班猫准备 Linux 和 SPI
 
@@ -131,8 +167,7 @@ python3 -c 'from pathlib import Path; data=Path("batch.bin").read_bytes(); asser
 
 ```sh
 make -C 925
-openocd -f 925/cmsis-dap.cfg \
-  -c "program 925/build-rct6/925.hex verify reset exit"
+openocd -f 925/stlink.cfg -c "program 925/build-rct6/925.hex verify reset exit"
 ```
 
 正常固件默认不生成采集数据，未接入采集逻辑时，RK 一直等待属于预期行为。电脑上的构建和协议测试通过不能代替上述实板验收。
