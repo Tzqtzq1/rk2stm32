@@ -1,0 +1,11 @@
+925/build/
+925/build-demo/
+925/build-cmake/
+925/build-rct6/
+925/build-rct6-demo/
+925/build-cmake-rct6/
+925/Debug/
+925/Release/
+rk3588/rk_read
+tests/build/
+.DS_Store
